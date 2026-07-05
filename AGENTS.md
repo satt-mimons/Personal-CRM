@@ -1,5 +1,5 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Agent guide
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+See [CLAUDE.md](./CLAUDE.md) for the stack, schema, conventions, and common
+tasks. Key rules: LLM calls in `src/lib/llm/`, DB queries in `src/lib/db/`,
+prefer Server Actions over API routes, and every screen must work at 390px wide.
