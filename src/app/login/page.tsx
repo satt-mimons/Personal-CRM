@@ -1,26 +1,11 @@
-"use client";
+import { signInWithGoogle } from "./actions";
 
-import { useActionState } from "react";
-import { login, signInWithPassword, type LoginState } from "./actions";
-
-const initialLoginState: LoginState = {
-  step: "email",
-  email: "",
-  status: "idle",
-};
-
-const initialPasswordState: LoginState = {
-  step: "password",
-  email: "",
-  status: "idle",
-};
-
-export default function LoginPage() {
-  const [state, formAction, pending] = useActionState(login, initialLoginState);
-  const [pwState, pwAction, pwPending] = useActionState(
-    signInWithPassword,
-    initialPasswordState,
-  );
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-12">
@@ -29,112 +14,38 @@ export default function LoginPage() {
         Your MBA recruiting network, in one place.
       </p>
 
-      {state.step === "email" ? (
-        <form action={formAction} className="mt-8 flex flex-col gap-3">
-          <input type="hidden" name="intent" value="send" />
-          <label htmlFor="email" className="text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            defaultValue={state.email}
-            placeholder="you@example.com"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-base outline-none focus:border-neutral-900"
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="mt-1 w-full rounded-lg bg-neutral-900 px-3 py-2.5 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {pending ? "Sending…" : "Email me a sign-in link"}
-          </button>
-          {state.status === "error" && (
-            <p className="text-sm text-red-600">{state.message}</p>
-          )}
-        </form>
-      ) : (
-        <form action={formAction} className="mt-8 flex flex-col gap-3">
-          <input type="hidden" name="intent" value="verify" />
-          <input type="hidden" name="email" value={state.email} />
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600">
-            We emailed <strong>{state.email}</strong>. Click the sign-in link to
-            finish — or, if your email includes a 6-digit code, enter it here.
-          </div>
-          <label htmlFor="token" className="text-sm font-medium">
-            6-digit code (optional)
-          </label>
-          <input
-            id="token"
-            name="token"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            pattern="[0-9]*"
-            maxLength={6}
-            required
-            autoFocus
-            placeholder="123456"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-center text-lg tracking-[0.4em] outline-none focus:border-neutral-900"
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="mt-1 w-full rounded-lg bg-neutral-900 px-3 py-2.5 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {pending ? "Verifying…" : "Verify & sign in"}
-          </button>
-          {state.status === "error" && (
-            <p className="text-sm text-red-600">{state.message}</p>
-          )}
-          <button
-            type="submit"
-            name="intent"
-            value="send"
-            formNoValidate
-            className="text-sm text-neutral-500 underline underline-offset-2"
-          >
-            Resend link
-          </button>
-        </form>
-      )}
+      <form action={signInWithGoogle} className="mt-8">
+        <button
+          type="submit"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-300 px-3 py-2.5 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path
+              fill="#4285F4"
+              d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
+            />
+            <path
+              fill="#34A853"
+              d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M3.97 10.72a5.41 5.41 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"
+            />
+            <path
+              fill="#EA4335"
+              d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"
+            />
+          </svg>
+          Continue with Google
+        </button>
+      </form>
 
-      <div className="mt-10 border-t border-neutral-200 pt-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-          Or sign in with a password
+      {error && (
+        <p className="mt-4 text-sm text-red-600">
+          Sign-in failed. Please try again.
         </p>
-        <form action={pwAction} className="mt-3 flex flex-col gap-3">
-          <input
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            defaultValue={pwState.email}
-            placeholder="you@example.com"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-base outline-none focus:border-neutral-900"
-          />
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            placeholder="Password"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-base outline-none focus:border-neutral-900"
-          />
-          <button
-            type="submit"
-            disabled={pwPending}
-            className="w-full rounded-lg border border-neutral-900 px-3 py-2.5 text-sm font-medium text-neutral-900 disabled:opacity-60"
-          >
-            {pwPending ? "Signing in…" : "Sign in"}
-          </button>
-          {pwState.status === "error" && (
-            <p className="text-sm text-red-600">{pwState.message}</p>
-          )}
-        </form>
-      </div>
+      )}
     </main>
   );
 }
