@@ -3,9 +3,9 @@ import { signInWithGoogle } from "./actions";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-12">
@@ -15,6 +15,7 @@ export default async function LoginPage({
       </p>
 
       <form action={signInWithGoogle} className="mt-8">
+        <input type="hidden" name="next" value={next ?? "/"} />
         <button
           type="submit"
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-300 px-3 py-2.5 text-sm font-medium text-neutral-900 hover:bg-neutral-50"

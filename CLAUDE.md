@@ -133,4 +133,21 @@ Copy `.env.example` → `.env.local` (and mirror in Vercel):
   editor.
 - **Seed contacts:** `npm run seed -- --dry-run` (parse/validate only) or
   `npm run seed -- --file path/to.csv` (writes via service role).
+- **Digest:** `npm run digest -- --dry-run` (rank + log, no email) or
+  `npm run digest` (sends via Resend). Cron: `GET /api/cron/digest` daily
+  11:00 UTC (7am ET) with `Authorization: Bearer $CRON_SECRET`.
 - **Build:** `npm run build`
+- **Tests:** `npm run test` (includes nudge engine scoring + digest tokens)
+
+## Nudge engine & daily digest
+
+- Pure scoring lives in `src/lib/nudge/engine.ts` (unit-tested). Inputs are
+  `contact_status` rows + open action items; output ≤5 `NudgeAction`s above
+  score 30. Excludes snoozed contacts and stages `offer` / `dormant`.
+- Suggested openers (top 3 only) come from one batched LLM call in
+  `src/lib/llm/openers.ts` — never auto-sent.
+- Digest email via Resend (`src/lib/digest/email.ts`). Zero nudges ⇒ no email.
+- One-click Snooze / Mark touched use HMAC-signed URLs
+  (`/api/digest/action`) so they work from the inbox without login.
+- Each run is logged to `digest_runs` (payload jsonb) for later metrics.
+- `/today` renders the same ranked list with in-app one-tap actions.

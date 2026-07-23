@@ -35,12 +35,31 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isPublic =
-    pathname.startsWith("/login") || pathname.startsWith("/auth");
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api/cron") ||
+    pathname.startsWith("/api/digest") ||
+    pathname.startsWith("/digest/done");
+
+  // Cron and signed digest links don't need a session refresh.
+  if (
+    pathname.startsWith("/api/cron") ||
+    pathname.startsWith("/api/digest")
+  ) {
+    return NextResponse.next({ request });
+  }
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    // Remember where the user was heading so we can return them after auth.
+    url.searchParams.set("next", pathname + request.nextUrl.search);
+    const redirectResponse = NextResponse.redirect(url);
+    // Preserve any refreshed auth cookies on the redirect response.
+    supabaseResponse.cookies
+      .getAll()
+      .forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
   }
 
   return supabaseResponse;

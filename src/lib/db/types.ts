@@ -48,6 +48,8 @@ export interface Contact {
   stage: Stage;
   cadence_days: number | null;
   snoozed_until: string | null;
+  /** Manual flag for an upcoming chat (YYYY-MM-DD). */
+  upcoming_chat_at: string | null;
   source: string | null;
   notes: string | null;
 }
@@ -96,10 +98,19 @@ export interface ContactStatus {
   stage: Stage;
   vertical: string | null;
   snoozed_until: string | null;
+  upcoming_chat_at: string | null;
   created_at: string;
   effective_cadence_days: number;
   last_touch_at: string | null;
   open_action_count: number;
   next_due_date: string;
   days_overdue: number;
+}
+
+export interface DigestRun {
+  id: string;
+  user_id: string;
+  sent_at: string;
+  nudge_count: number;
+  payload: unknown;
 }
