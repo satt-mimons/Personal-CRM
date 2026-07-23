@@ -18,8 +18,8 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-dvh flex-col">
       <Nav />
-      {/* pb-24 leaves room for the mobile bottom bar */}
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 sm:pb-6">
+      {/* pb-24 leaves room for the mobile bottom bar; wide enough for board */}
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 pb-24 sm:pb-6">
         {children}
       </main>
     </div>

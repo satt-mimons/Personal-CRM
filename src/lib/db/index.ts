@@ -10,3 +10,5 @@ export * from "./contacts";
 export * from "./interactions";
 export * from "./action-items";
 export * from "./digest";
+export * from "./funnel";
+export * from "./funnel-math";

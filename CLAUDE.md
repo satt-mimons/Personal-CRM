@@ -139,6 +139,16 @@ Copy `.env.example` → `.env.local` (and mirror in Vercel):
 - **Build:** `npm run build`
 - **Tests:** `npm run test` (includes nudge engine scoring + digest tokens)
 
+## Board & funnel
+
+- `/board` is a Kanban of stages (`BOARD_STAGES` in `src/lib/db/funnel.ts`).
+  Desktop: HTML5 drag between columns. Mobile: per-card stage picker.
+  Stage changes go through `updateContactStage` (DB trigger writes `stage_events`).
+- Filters (`vertical`, `tier`, `dormant=1`) persist in URL search params.
+- Funnel stats (collapsible) + vertical conversion table live in
+  `getFunnelStats()` — keep that query in `/lib/db/funnel.ts` for reuse.
+- Days-in-stage on cards and median dwell come from `stage_events`.
+
 ## Nudge engine & daily digest
 
 - Pure scoring lives in `src/lib/nudge/engine.ts` (unit-tested). Inputs are
