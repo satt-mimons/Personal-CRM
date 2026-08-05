@@ -179,7 +179,7 @@ export function getTranscribeProvider(): TranscribeProvider {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new TranscriptionError(
-      "Voice notes aren't configured on this deployment.",
+      "Missing GROQ_API_KEY. Add it to .env.local (or Vercel env), then restart the server.",
       false,
     );
   }

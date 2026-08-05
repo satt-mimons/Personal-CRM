@@ -181,7 +181,9 @@ export function VoiceRecorder({
             </span>
           ) : (
             <span className="text-neutral-500">
-              Record a voice note — we&apos;ll write it up below.
+              {engine === "speech"
+                ? "Dictate a voice note — text appears as you speak."
+                : "Record a voice note — we\u2019ll transcribe it when you stop."}
             </span>
           )}
           {nearLimit && (
