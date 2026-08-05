@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { ContactPickerRow } from "@/lib/db/contacts";
 import type { ExtractionResult } from "@/lib/llm/extract";
 import {
@@ -17,7 +18,10 @@ import type {
   EditableActionItem,
   EditableContact,
   SavePayload,
+  SaveSuccess,
+  ThankYouContext,
 } from "./types";
+import { isThankYouEligible } from "./types";
 
 const INPUT =
   "w-full rounded-lg border border-neutral-300 px-3 py-2 text-base outline-none focus:border-neutral-900";
@@ -49,13 +53,16 @@ export function ConfirmForm({
   duplicates,
   pickedContact,
   onBack,
+  onSavedThankYou,
 }: {
   rawText: string;
   extraction: ExtractionResult;
   duplicates: DuplicateInfo[];
   pickedContact: ContactPickerRow | null;
   onBack: () => void;
+  onSavedThankYou: (ctx: ThankYouContext) => void;
 }) {
+  const router = useRouter();
   const [contact, setContact] = useState<EditableContact>(() => ({
     name: extraction.contact?.name ?? "",
     company: extraction.contact?.company ?? null,
@@ -117,7 +124,29 @@ export function ConfirmForm({
     };
     startTransition(async () => {
       const res = await saveInteractionAction(payload);
-      if (res && !res.ok) setError(res.error);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const success = res as SaveSuccess;
+      if (isThankYouEligible(success.interactionType)) {
+        onSavedThankYou({
+          contactId: success.contactId,
+          interactionId: success.interactionId,
+          contactName: success.contactName,
+          company: success.company,
+          email:
+            success.email ??
+            (pickedContact && existingContactId === pickedContact.id
+              ? pickedContact.email
+              : null),
+          interactionType: success.interactionType,
+          summary: success.summary,
+          rawNotes: success.rawNotes,
+        });
+        return;
+      }
+      router.push(`/contacts/${success.contactId}`);
     });
   }
 
@@ -130,7 +159,6 @@ export function ConfirmForm({
         </p>
       </div>
 
-      {/* Duplicate warning */}
       {isNewContact && duplicates.length > 0 && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
           <p className="text-sm font-medium text-amber-900">
@@ -160,7 +188,6 @@ export function ConfirmForm({
         </div>
       )}
 
-      {/* Contact section */}
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-neutral-700">Contact</h2>
 
@@ -258,7 +285,6 @@ export function ConfirmForm({
         )}
       </div>
 
-      {/* Interaction section */}
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-neutral-700">Interaction</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -352,7 +378,6 @@ export function ConfirmForm({
         </div>
       </div>
 
-      {/* Stage */}
       <div className="flex flex-col gap-1">
         <label className={LABEL}>Stage</label>
         <select
@@ -368,7 +393,6 @@ export function ConfirmForm({
         </select>
       </div>
 
-      {/* Action items */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-700">Action items</h2>
@@ -452,7 +476,6 @@ export function ConfirmForm({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {/* Actions */}
       <div className="sticky bottom-20 flex gap-3 sm:bottom-4">
         <button
           type="button"

@@ -261,6 +261,22 @@ export async function updateContactProfile(
   if (error) throw error;
 }
 
+export async function updateContactEmailIfEmpty(
+  id: string,
+  email: string,
+): Promise<void> {
+  const trimmed = email.trim();
+  if (!trimmed) return;
+  const { supabase } = await dbContext();
+  const existing = await getContactById(id);
+  if (!existing || existing.email) return;
+  const { error } = await supabase
+    .from("contacts")
+    .update({ email: trimmed })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 /** Set snoozed_until (YYYY-MM-DD). Pass null to clear. */
 export async function snoozeContact(
   id: string,

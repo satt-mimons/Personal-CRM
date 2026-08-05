@@ -14,3 +14,4 @@ export * from "./funnel";
 export * from "./funnel-math";
 export * from "./transcription-usage";
 export * from "./reminder-settings";
+export * from "./gmail-connections";

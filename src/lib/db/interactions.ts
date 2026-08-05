@@ -24,6 +24,19 @@ export async function insertInteraction(
   return data as Interaction;
 }
 
+export async function getInteractionById(
+  id: string,
+): Promise<Interaction | null> {
+  const { supabase } = await dbContext();
+  const { data, error } = await supabase
+    .from("interactions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Interaction) ?? null;
+}
+
 export async function getInteractionsByContact(
   contactId: string,
 ): Promise<Interaction[]> {

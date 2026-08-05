@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { ContactPickerRow } from "@/lib/db/contacts";
 import type { ExtractionResult } from "@/lib/llm/extract";
 import { normalize } from "@/lib/utils/fuzzy";
-import { extractAction } from "./actions";
+import { extractAction, loadThankYouContextAction } from "./actions";
 import { ConfirmForm } from "./confirm-form";
+import { ThankYouStep } from "./thank-you-step";
 import { VoiceRecorder } from "./voice-recorder";
-import type { DuplicateInfo } from "./types";
+import type { DuplicateInfo, ThankYouContext } from "./types";
+import { THANK_YOU_DRAFT_STORAGE_KEY } from "./types";
 
 type Step =
   | { name: "capture" }
@@ -15,6 +18,12 @@ type Step =
       name: "confirm";
       extraction: ExtractionResult;
       duplicates: DuplicateInfo[];
+    }
+  | {
+      name: "thankYou";
+      context: ThankYouContext;
+      gmailJustConnected: boolean;
+      gmailError: string | null;
     };
 
 function filterContacts(
@@ -35,16 +44,35 @@ function filterContacts(
     .map((x) => x.c);
 }
 
+function readStoredDraft(): ThankYouContext | null {
+  try {
+    const raw = sessionStorage.getItem(THANK_YOU_DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ThankYouContext;
+  } catch {
+    return null;
+  }
+}
+
 export function LogFlow({
   contacts,
   preselectedContact = null,
   transcriptionConfigured = false,
+  resumeThankYou = null,
 }: {
   contacts: ContactPickerRow[];
   preselectedContact?: ContactPickerRow | null;
   /** True when GROQ_API_KEY is present on the server (never the key itself). */
   transcriptionConfigured?: boolean;
+  /** Resume thank-you after Gmail OAuth redirect. */
+  resumeThankYou?: {
+    contactId: string;
+    interactionId: string;
+    gmailConnected: boolean;
+    gmailError: string | null;
+  } | null;
 }) {
+  const router = useRouter();
   const [step, setStep] = useState<Step>({ name: "capture" });
   const [rawText, setRawText] = useState("");
   const [selectedContact, setSelectedContact] =
@@ -53,12 +81,59 @@ export function LogFlow({
   const [showResults, setShowResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [resuming, setResuming] = useState(Boolean(resumeThankYou));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resumeStarted = useRef(false);
 
   const results = useMemo(
     () => filterContacts(contacts, query),
     [contacts, query],
   );
+
+  useEffect(() => {
+    if (!resumeThankYou || resumeStarted.current) return;
+    resumeStarted.current = true;
+
+    const stored = readStoredDraft();
+    const storedMatches =
+      stored &&
+      stored.contactId === resumeThankYou.contactId &&
+      stored.interactionId === resumeThankYou.interactionId
+        ? stored
+        : null;
+
+    void (async () => {
+      const loaded = await loadThankYouContextAction({
+        contactId: resumeThankYou.contactId,
+        interactionId: resumeThankYou.interactionId,
+      });
+      if (!loaded.ok) {
+        setResuming(false);
+        setError(loaded.error);
+        router.replace("/log");
+        return;
+      }
+      setStep({
+        name: "thankYou",
+        context: {
+          contactId: resumeThankYou.contactId,
+          interactionId: resumeThankYou.interactionId,
+          contactName: loaded.contactName,
+          company: loaded.company,
+          email: storedMatches?.email ?? loaded.email,
+          interactionType: loaded.interactionType,
+          summary: loaded.summary,
+          rawNotes: loaded.rawNotes,
+          subject: storedMatches?.subject,
+          body: storedMatches?.body,
+        },
+        gmailJustConnected: resumeThankYou.gmailConnected,
+        gmailError: resumeThankYou.gmailError,
+      });
+      setResuming(false);
+      router.replace("/log");
+    })();
+  }, [resumeThankYou, router]);
 
   /** Append rather than replace so dictation can be mixed with typing, and so
    *  several short bursts add up instead of overwriting each other. */
@@ -86,6 +161,25 @@ export function LogFlow({
     });
   }
 
+  if (resuming) {
+    return (
+      <section className="flex flex-col gap-4">
+        <p className="text-sm text-neutral-500">Restoring your thank-you draft…</p>
+      </section>
+    );
+  }
+
+  if (step.name === "thankYou") {
+    return (
+      <ThankYouStep
+        context={step.context}
+        gmailJustConnected={step.gmailJustConnected}
+        gmailError={step.gmailError}
+        onDone={() => setStep({ name: "capture" })}
+      />
+    );
+  }
+
   if (step.name === "confirm") {
     return (
       <ConfirmForm
@@ -97,6 +191,14 @@ export function LogFlow({
           setStep({ name: "capture" });
           requestAnimationFrame(() => textareaRef.current?.focus());
         }}
+        onSavedThankYou={(ctx) =>
+          setStep({
+            name: "thankYou",
+            context: ctx,
+            gmailJustConnected: false,
+            gmailError: null,
+          })
+        }
       />
     );
   }
@@ -110,7 +212,6 @@ export function LogFlow({
         </p>
       </div>
 
-      {/* Contact picker (optional) */}
       <div className="relative">
         {selectedContact ? (
           <div className="flex items-center justify-between rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2">
@@ -181,7 +282,6 @@ export function LogFlow({
         transcriptionConfigured={transcriptionConfigured}
       />
 
-      {/* Raw notes */}
       <textarea
         ref={textareaRef}
         autoFocus

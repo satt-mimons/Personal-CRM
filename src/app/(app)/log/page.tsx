@@ -6,19 +6,39 @@ export const dynamic = "force-dynamic";
 export default async function LogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ contactId?: string }>;
+  searchParams: Promise<{
+    contactId?: string;
+    thankYouContactId?: string;
+    thankYouInteractionId?: string;
+    gmailConnected?: string;
+    gmailError?: string;
+  }>;
 }) {
-  const { contactId } = await searchParams;
+  const params = await searchParams;
   const contacts = await getContactsForPicker();
   const preselected =
-    contactId ? contacts.find((c) => c.id === contactId) ?? null : null;
+    params.contactId
+      ? contacts.find((c) => c.id === params.contactId) ?? null
+      : null;
   // Boolean only — never pass the key to the client.
   const transcriptionConfigured = Boolean(process.env.GROQ_API_KEY);
+
+  const resumeThankYou =
+    params.thankYouContactId && params.thankYouInteractionId
+      ? {
+          contactId: params.thankYouContactId,
+          interactionId: params.thankYouInteractionId,
+          gmailConnected: params.gmailConnected === "1",
+          gmailError: params.gmailError ?? null,
+        }
+      : null;
+
   return (
     <LogFlow
       contacts={contacts}
       preselectedContact={preselected}
       transcriptionConfigured={transcriptionConfigured}
+      resumeThankYou={resumeThankYou}
     />
   );
 }

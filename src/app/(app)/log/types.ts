@@ -64,3 +64,46 @@ export interface SavePayload {
   actionItems: EditableActionItem[];
   stage: Stage;
 }
+
+/** Interaction types that surface the post-save thank-you draft step. */
+export const THANK_YOU_INTERACTION_TYPES: readonly InteractionType[] = [
+  "coffee_chat",
+  "call",
+  "event",
+] as const;
+
+export function isThankYouEligible(type: InteractionType): boolean {
+  return (THANK_YOU_INTERACTION_TYPES as readonly string[]).includes(type);
+}
+
+/** Returned by saveInteractionAction on success (no longer redirects). */
+export interface SaveSuccess {
+  ok: true;
+  contactId: string;
+  interactionId: string;
+  contactName: string;
+  company: string | null;
+  email: string | null;
+  interactionType: InteractionType;
+  summary: string;
+  rawNotes: string;
+}
+
+export type SaveResponse = SaveSuccess | { ok: false; error: string };
+
+/** Client-side payload for the thank-you step (and sessionStorage across OAuth). */
+export interface ThankYouContext {
+  contactId: string;
+  interactionId: string;
+  contactName: string;
+  company: string | null;
+  email: string | null;
+  interactionType: InteractionType;
+  summary: string;
+  rawNotes: string;
+  /** Preserved edits across Gmail OAuth reconnect. */
+  subject?: string;
+  body?: string;
+}
+
+export const THANK_YOU_DRAFT_STORAGE_KEY = "pipeline.thankYouDraft";

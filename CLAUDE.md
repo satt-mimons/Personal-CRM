@@ -42,6 +42,7 @@ src/
   lib/
     db/               # ALL Supabase queries (typed). types.ts = domain types
     llm/              # ALL Anthropic calls (typed, server-only)
+    gmail/            # Gmail draft create + token refresh (server-only)
     supabase/         # client.ts (browser), server.ts (RSC/actions),
                       # middleware.ts (session refresh), admin.ts (service role)
     auth/actions.ts   # signOut server action
@@ -131,8 +132,11 @@ Copy `.env.example` → `.env.local` (and mirror in Vercel):
 - `SUPABASE_SERVICE_ROLE_KEY` — server/scripts only, **bypasses RLS**.
 - `ANTHROPIC_API_KEY` — server only.
 - `GROQ_API_KEY` — server only, voice transcription. Optional.
-- `RESEND_API_KEY` — not used yet.
-- `NEXT_PUBLIC_SITE_URL` — magic-link redirect base.
+- `RESEND_API_KEY` — digest email via Resend.
+- `NEXT_PUBLIC_SITE_URL` — OAuth redirect + digest deep links.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — same Google OAuth client as
+  Supabase Auth; used to refresh Gmail tokens for thank-you drafts.
+- `GMAIL_TOKEN_ENCRYPTION_KEY` — AES key for `gmail_connections` ciphertext.
 
 ## Common tasks
 
@@ -217,3 +221,23 @@ that runs Next.js needs its own copy:
 2. **Vercel:** Project Settings → Environment Variables → `GROQ_API_KEY` for
    Production and Preview. Cloud-agent `.env.local` does **not** sync to your
    laptop or to Vercel.
+
+## Gmail thank-you drafts
+
+After logging a `coffee_chat` / `call` / `event`, `/log` offers a third step that
+drafts a short thank-you (`src/lib/llm/thank-you.ts`) and can create a **Gmail
+Draft** (never auto-sends) via `users.drafts.create`.
+
+- **Incremental OAuth only** — login does not request Gmail scopes.
+  `connectGmailAction` asks for `gmail.compose` when the user chooses
+  “Open draft in Gmail.” Tokens land in `gmail_connections` (encrypted).
+- **GCP setup:** enable Gmail API on the Google Cloud project used by Supabase
+  Auth; add `https://www.googleapis.com/auth/gmail.compose` to the OAuth consent
+  screen. For a single-user app, keep the consent screen in Testing and add your
+  Google account as a test user (sensitive-scope verification not required).
+- **Env:** `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (same client as Supabase
+  Google provider) + `GMAIL_TOKEN_ENCRYPTION_KEY`. Apply migration
+  `supabase/migrations/20260805010000_gmail_connections.sql`.
+- Draft body is ephemeral (not stored). Skip always goes to the contact page.
+- Openers on Today/digest remain separate (`src/lib/llm/openers.ts`).
+

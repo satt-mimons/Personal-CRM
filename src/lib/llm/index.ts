@@ -24,6 +24,11 @@ export {
   type OpenerContext,
 } from "./openers";
 export {
+  draftThankYouEmail,
+  type ThankYouDraftInput,
+  type ThankYouDraft,
+} from "./thank-you";
+export {
   transcribeAudio,
   createGroqProvider,
   getTranscribeProvider,
