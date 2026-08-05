@@ -10,6 +10,9 @@ A single-user personal CRM for MBA recruiting networking. One user (me).
 - **Tailwind CSS** (v4).
 - **Anthropic API** (`claude-sonnet-4-6`) for LLM features — **server-side only**,
   key in `ANTHROPIC_API_KEY`.
+- **Groq** (`whisper-large-v3-turbo`) for voice-note transcription — **server-side
+  only**, key in `GROQ_API_KEY`. Optional: without it the browser-native
+  dictation path still works.
 - **Resend** (`RESEND_API_KEY`) for email — not used yet; wired in a later prompt.
 
 ## Conventions
@@ -78,6 +81,11 @@ timestamps, and **RLS enabled** scoped to `auth.uid() = user_id`.
 ### stage_events (append-only stage history)
 `contact_id` (fk), `from_stage`, `to_stage` (required).
 
+### transcription_usage (voice-note quota meter)
+Primary key `(user_id, day)`. `seconds`, `requests`. Incremented atomically by
+the `record_transcription_usage(int)` SQL function — the Groq key is shared and
+its limits are org-wide, so this stops one user draining everyone's budget.
+
 ## tier → cadence defaults
 
 When `contacts.cadence_days` is **null**, cadence is derived from tier:
@@ -122,6 +130,7 @@ Copy `.env.example` → `.env.local` (and mirror in Vercel):
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — client + server.
 - `SUPABASE_SERVICE_ROLE_KEY` — server/scripts only, **bypasses RLS**.
 - `ANTHROPIC_API_KEY` — server only.
+- `GROQ_API_KEY` — server only, voice transcription. Optional.
 - `RESEND_API_KEY` — not used yet.
 - `NEXT_PUBLIC_SITE_URL` — magic-link redirect base.
 
@@ -161,3 +170,50 @@ Copy `.env.example` → `.env.local` (and mirror in Vercel):
   (`/api/digest/action`) so they work from the inbox without login.
 - Each run is logged to `digest_runs` (payload jsonb) for later metrics.
 - `/today` renders the same ranked list with in-app one-tap actions.
+
+## Voice logging
+
+`/log` has a record button that fills the same `rawText` textarea, so extraction,
+the confirm step, and saving are unchanged. **Audio is never persisted** — it is
+transcribed in flight and discarded.
+
+Engine choice (resolved in `voice-recorder.tsx` from a server-provided
+`transcriptionConfigured` flag = `Boolean(process.env.GROQ_API_KEY)`):
+
+| Condition | Engine | Notes |
+| ----------------------------------------- | -------------------------------- | ----- |
+| `GROQ_API_KEY` set + MediaRecorder | Record → Groq Whisper (primary) | Reliable. Web Speech may run as live captions only. |
+| No key + Web Speech available | In-browser Web Speech | Fallback only. |
+| No key + MediaRecorder only | Mic shows an error until key is set | |
+
+Groq is primary on purpose: Web Speech often looks live, then returns an empty
+string on stop because finals arrive asynchronously after `recognition.stop()`.
+That produced "Didn't catch anything" after a session that seemed to work.
+
+- Recording caps at `MAX_RECORDING_SECONDS` (180) at 24kbps mono — roughly 540KB,
+  under Vercel's hard 4.5MB body limit. `experimental.serverActions.bodySizeLimit`
+  in `next.config.ts` must stay above that; the default is 1MB.
+- iOS `MediaRecorder` emits `audio/mp4`, not `audio/webm`. `extensionForMimeType`
+  maps it to a filename Whisper accepts — sending the wrong extension is rejected.
+- Whisper gets a vocabulary prompt seeded with the user's contact names and
+  companies (picked contact first), which is where dictation usually fails.
+- Per-user quota lives in `transcription_usage`; `transcribeAction` refuses before
+  spending org quota. Duration is `max(client-reported, bytes/3000)` so a client
+  under-reporting cannot slip past it.
+- A failed upload keeps the blob client-side, so "Try again" never asks the user
+  to re-record.
+- `getUserMedia` requires HTTPS. `localhost:3002` is fine; testing from a phone
+  over plain http on the LAN is not — use a Vercel preview URL.
+- Provider is swappable via `createGroqProvider` in `src/lib/llm/transcribe.ts`.
+
+### `GROQ_API_KEY` setup (per machine / per deploy)
+
+The key is a secret — it is gitignored and **cannot** be committed. Each place
+that runs Next.js needs its own copy:
+
+1. **Local:** put `GROQ_API_KEY=...` in `.env.local`, then restart `npm run dev`
+   (env is read at boot). Prefer `vercel env pull .env.local` once the key lives
+   in the Vercel project, so laptops stay in sync without pasting.
+2. **Vercel:** Project Settings → Environment Variables → `GROQ_API_KEY` for
+   Production and Preview. Cloud-agent `.env.local` does **not** sync to your
+   laptop or to Vercel.

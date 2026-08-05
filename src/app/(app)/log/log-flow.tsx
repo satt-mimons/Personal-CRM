@@ -6,6 +6,7 @@ import type { ExtractionResult } from "@/lib/llm/extract";
 import { normalize } from "@/lib/utils/fuzzy";
 import { extractAction } from "./actions";
 import { ConfirmForm } from "./confirm-form";
+import { VoiceRecorder } from "./voice-recorder";
 import type { DuplicateInfo } from "./types";
 
 type Step =
@@ -37,9 +38,12 @@ function filterContacts(
 export function LogFlow({
   contacts,
   preselectedContact = null,
+  transcriptionConfigured = false,
 }: {
   contacts: ContactPickerRow[];
   preselectedContact?: ContactPickerRow | null;
+  /** True when GROQ_API_KEY is present on the server (never the key itself). */
+  transcriptionConfigured?: boolean;
 }) {
   const [step, setStep] = useState<Step>({ name: "capture" });
   const [rawText, setRawText] = useState("");
@@ -55,6 +59,13 @@ export function LogFlow({
     () => filterContacts(contacts, query),
     [contacts, query],
   );
+
+  /** Append rather than replace so dictation can be mixed with typing, and so
+   *  several short bursts add up instead of overwriting each other. */
+  function appendTranscript(text: string) {
+    setRawText((prev) => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
 
   function submitCapture() {
     setError(null);
@@ -162,6 +173,13 @@ export function LogFlow({
           </>
         )}
       </div>
+
+      <VoiceRecorder
+        contactId={selectedContact?.id ?? null}
+        onTranscript={appendTranscript}
+        disabled={pending}
+        transcriptionConfigured={transcriptionConfigured}
+      />
 
       {/* Raw notes */}
       <textarea

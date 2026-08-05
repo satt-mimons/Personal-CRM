@@ -23,3 +23,17 @@ export {
   attachOpeners,
   type OpenerContext,
 } from "./openers";
+export {
+  transcribeAudio,
+  createGroqProvider,
+  getTranscribeProvider,
+  buildVocabularyPrompt,
+  extensionForMimeType,
+  TranscriptionError,
+  GROQ_TRANSCRIBE_URL,
+  GROQ_TRANSCRIBE_MODEL,
+  MAX_AUDIO_BYTES,
+  type TranscribeProvider,
+  type TranscribeInput,
+  type FetchLike,
+} from "./transcribe";
