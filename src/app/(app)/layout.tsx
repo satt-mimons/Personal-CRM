@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Nav } from "@/components/nav";
+import { getReminderNavCount } from "@/lib/db/reminders";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({
@@ -14,10 +15,11 @@ export default async function AppLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const todayCount = await getReminderNavCount();
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <Nav />
+      <Nav todayCount={todayCount} />
       {/* pb-24 leaves room for the mobile bottom bar; wide enough for board */}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 pb-24 sm:pb-6">
         {children}

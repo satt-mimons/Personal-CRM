@@ -15,7 +15,7 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Nav() {
+export function Nav({ todayCount = 0 }: { todayCount?: number }) {
   const pathname = usePathname();
 
   return (
@@ -39,7 +39,18 @@ export function Nav() {
                     : "text-neutral-600 hover:bg-neutral-100"
                 }`}
               >
-                {t.label}
+                <span>{t.label}</span>
+                {t.href === "/" && todayCount > 0 && (
+                  <span
+                    className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                      isActive(pathname, t.href)
+                        ? "bg-white text-neutral-900"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {todayCount}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
@@ -69,13 +80,18 @@ export function Nav() {
           <Link
             key={t.href}
             href={t.href}
-            className={`flex flex-col items-center gap-0.5 py-2 text-xs font-medium ${
+            className={`relative flex flex-col items-center gap-0.5 py-2 text-xs font-medium ${
               isActive(pathname, t.href)
                 ? "text-neutral-900"
                 : "text-neutral-400"
             }`}
           >
             {t.label}
+            {t.href === "/" && todayCount > 0 && (
+              <span className="absolute right-5 top-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {todayCount}
+              </span>
+            )}
           </Link>
         ))}
         <Link

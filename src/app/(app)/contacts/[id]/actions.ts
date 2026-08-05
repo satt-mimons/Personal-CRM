@@ -56,6 +56,14 @@ export async function updateContactProfileAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const name = patch.name.trim();
   if (!name) return { ok: false, error: "Name is required." };
+  if (
+    patch.cadence_days !== null &&
+    (!Number.isInteger(patch.cadence_days) ||
+      patch.cadence_days < 1 ||
+      patch.cadence_days > 365)
+  ) {
+    return { ok: false, error: "Cadence must be between 1 and 365 days." };
+  }
   await updateContactProfile(contactId, {
     name,
     company: emptyToNull(patch.company),
@@ -63,6 +71,7 @@ export async function updateContactProfileAction(
     email: emptyToNull(patch.email),
     linkedin_url: emptyToNull(patch.linkedin_url),
     vertical: emptyToNull(patch.vertical),
+    cadence_days: patch.cadence_days,
     notes: emptyToNull(patch.notes),
     upcoming_chat_at: emptyToNull(patch.upcoming_chat_at),
   });

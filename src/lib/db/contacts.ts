@@ -234,6 +234,7 @@ export interface ContactProfilePatch {
   email: string | null;
   linkedin_url: string | null;
   vertical: string | null;
+  cadence_days: number | null;
   notes: string | null;
   upcoming_chat_at: string | null;
 }
@@ -252,6 +253,7 @@ export async function updateContactProfile(
       email: patch.email,
       linkedin_url: patch.linkedin_url,
       vertical: patch.vertical,
+      cadence_days: patch.cadence_days,
       notes: patch.notes,
       upcoming_chat_at: patch.upcoming_chat_at,
     })
