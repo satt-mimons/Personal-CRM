@@ -2,7 +2,12 @@
 
 import { useState, useTransition } from "react";
 import type { Contact } from "@/lib/db/types";
-import { STAGES, type Stage, type Tier } from "@/lib/db/types";
+import {
+  STAGES,
+  TIER_CADENCE_DAYS,
+  type Stage,
+  type Tier,
+} from "@/lib/db/types";
 import {
   setContactStageAction,
   setContactTierAction,
@@ -29,6 +34,8 @@ type ProfileDraft = {
   email: string;
   linkedin_url: string;
   vertical: string;
+  cadence_days: string;
+  use_default_cadence: boolean;
   notes: string;
   upcoming_chat_at: string;
 };
@@ -41,6 +48,8 @@ function draftFromContact(c: Contact): ProfileDraft {
     email: c.email ?? "",
     linkedin_url: c.linkedin_url ?? "",
     vertical: c.vertical ?? "",
+    cadence_days: c.cadence_days ? String(c.cadence_days) : "",
+    use_default_cadence: c.cadence_days == null,
     notes: c.notes ?? "",
     upcoming_chat_at: c.upcoming_chat_at?.slice(0, 10) ?? "",
   };
@@ -62,6 +71,15 @@ export function ContactHeader({ contact }: { contact: Contact }) {
 
   function save() {
     setError(null);
+    let cadenceDays: number | null = null;
+    if (!draft.use_default_cadence) {
+      const parsed = Number(draft.cadence_days);
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 365) {
+        setError("Cadence must be between 1 and 365 days.");
+        return;
+      }
+      cadenceDays = parsed;
+    }
     startTransition(async () => {
       const result = await updateContactProfileAction(contact.id, {
         name: draft.name,
@@ -70,6 +88,7 @@ export function ContactHeader({ contact }: { contact: Contact }) {
         email: draft.email,
         linkedin_url: draft.linkedin_url,
         vertical: draft.vertical,
+        cadence_days: cadenceDays,
         notes: draft.notes,
         upcoming_chat_at: draft.upcoming_chat_at,
       });
@@ -183,6 +202,41 @@ export function ContactHeader({ contact }: { contact: Contact }) {
               }
             />
           </div>
+          <div className="flex flex-col gap-2">
+            <label className={LABEL}>Follow-up cadence</label>
+            <label className="flex items-center gap-2 text-sm text-neutral-600">
+              <input
+                type="checkbox"
+                checked={draft.use_default_cadence}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    use_default_cadence: e.target.checked,
+                    cadence_days: e.target.checked ? "" : d.cadence_days,
+                  }))
+                }
+              />
+              Use tier default ({TIER_CADENCE_DAYS[contact.tier]} days)
+            </label>
+            {!draft.use_default_cadence && (
+              <div className="flex items-center gap-2">
+                <input
+                  className={`${INPUT} max-w-24`}
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={draft.cadence_days}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      cadence_days: e.target.value,
+                    }))
+                  }
+                />
+                <span className="text-sm text-neutral-500">days</span>
+              </div>
+            )}
+          </div>
           <div className="flex flex-col gap-1 sm:col-span-2">
             <label className={LABEL}>Notes</label>
             <textarea
@@ -264,6 +318,13 @@ export function ContactHeader({ contact }: { contact: Contact }) {
             ))}
           </select>
         </label>
+
+        <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600">
+          Cadence{" "}
+          {contact.cadence_days
+            ? `${contact.cadence_days}d`
+            : `${TIER_CADENCE_DAYS[contact.tier]}d default`}
+        </span>
       </div>
 
       {(contact.email || contact.linkedin_url || contact.upcoming_chat_at) && (

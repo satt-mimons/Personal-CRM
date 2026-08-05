@@ -18,6 +18,40 @@ export async function snoozeFromToday(contactId: string) {
   revalidatePath(`/contacts/${contactId}`);
 }
 
+export async function completeActionFromToday(
+  actionId: string,
+  contactId: string,
+) {
+  const { supabase, userId } = await dbContext();
+  const { error } = await supabase
+    .from("action_items")
+    .update({ status: "done" })
+    .eq("id", actionId)
+    .eq("contact_id", contactId)
+    .eq("user_id", userId);
+  if (error) throw error;
+  revalidatePath("/");
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${contactId}`);
+}
+
+export async function dropActionFromToday(
+  actionId: string,
+  contactId: string,
+) {
+  const { supabase, userId } = await dbContext();
+  const { error } = await supabase
+    .from("action_items")
+    .update({ status: "dropped" })
+    .eq("id", actionId)
+    .eq("contact_id", contactId)
+    .eq("user_id", userId);
+  if (error) throw error;
+  revalidatePath("/");
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${contactId}`);
+}
+
 export async function markTouchedFromToday(contactId: string) {
   const { supabase, userId } = await dbContext();
   const { error } = await supabase.from("interactions").insert({
