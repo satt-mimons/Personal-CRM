@@ -227,6 +227,38 @@ export async function updateContactTier(id: string, tier: Tier): Promise<void> {
   if (error) throw error;
 }
 
+export interface ContactProfilePatch {
+  name: string;
+  company: string | null;
+  title: string | null;
+  email: string | null;
+  linkedin_url: string | null;
+  vertical: string | null;
+  notes: string | null;
+  upcoming_chat_at: string | null;
+}
+
+export async function updateContactProfile(
+  id: string,
+  patch: ContactProfilePatch,
+): Promise<void> {
+  const { supabase } = await dbContext();
+  const { error } = await supabase
+    .from("contacts")
+    .update({
+      name: patch.name,
+      company: patch.company,
+      title: patch.title,
+      email: patch.email,
+      linkedin_url: patch.linkedin_url,
+      vertical: patch.vertical,
+      notes: patch.notes,
+      upcoming_chat_at: patch.upcoming_chat_at,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 /** Set snoozed_until (YYYY-MM-DD). Pass null to clear. */
 export async function snoozeContact(
   id: string,

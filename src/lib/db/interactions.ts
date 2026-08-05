@@ -36,3 +36,37 @@ export async function getInteractionsByContact(
   if (error) throw error;
   return (data ?? []) as Interaction[];
 }
+
+export interface InteractionPatch {
+  occurred_at: string;
+  type: InteractionType;
+  raw_notes: string | null;
+  summary: string | null;
+  warmth: number | null;
+  direction: Direction | null;
+}
+
+export async function updateInteraction(
+  id: string,
+  patch: InteractionPatch,
+): Promise<void> {
+  const { supabase } = await dbContext();
+  const { error } = await supabase
+    .from("interactions")
+    .update({
+      occurred_at: patch.occurred_at,
+      type: patch.type,
+      raw_notes: patch.raw_notes,
+      summary: patch.summary,
+      warmth: patch.warmth,
+      direction: patch.direction,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteInteraction(id: string): Promise<void> {
+  const { supabase } = await dbContext();
+  const { error } = await supabase.from("interactions").delete().eq("id", id);
+  if (error) throw error;
+}

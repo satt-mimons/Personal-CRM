@@ -55,7 +55,10 @@ export default async function ContactDetailPage({
 
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-neutral-700">History</h2>
-        <InteractionTimeline interactions={interactions} />
+        <InteractionTimeline
+          contactId={contact.id}
+          interactions={interactions}
+        />
       </div>
     </section>
   );

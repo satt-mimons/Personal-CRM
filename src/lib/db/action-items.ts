@@ -47,3 +47,25 @@ export async function updateActionItemStatus(
     .eq("id", id);
   if (error) throw error;
 }
+
+export interface ActionItemPatch {
+  description: string;
+  owner: ActionOwner;
+  due_date: string | null;
+}
+
+export async function updateActionItem(
+  id: string,
+  patch: ActionItemPatch,
+): Promise<void> {
+  const { supabase } = await dbContext();
+  const { error } = await supabase
+    .from("action_items")
+    .update({
+      description: patch.description,
+      owner: patch.owner,
+      due_date: patch.due_date,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
