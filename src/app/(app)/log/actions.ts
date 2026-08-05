@@ -2,14 +2,25 @@
 
 import { redirect } from "next/navigation";
 import { extractInteraction, ExtractionParseError } from "@/lib/llm/extract";
+import { transcribeAudio, TranscriptionError } from "@/lib/llm/transcribe";
 import {
   findPossibleDuplicates,
   upsertContactByIdentity,
   updateContactStage,
+  getContactsForPicker,
 } from "@/lib/db/contacts";
 import { insertInteraction } from "@/lib/db/interactions";
 import { insertActionItems } from "@/lib/db/action-items";
-import type { ExtractResponse, SavePayload } from "./types";
+import {
+  checkTranscriptionQuota,
+  recordTranscriptionUsage,
+} from "@/lib/db/transcription-usage";
+import {
+  MAX_RECORDING_SECONDS,
+  type ExtractResponse,
+  type SavePayload,
+  type TranscribeResponse,
+} from "./types";
 
 /** Reject empty or gibberish input before spending an API call. */
 function isMeaningful(text: string): boolean {
@@ -17,6 +28,105 @@ function isMeaningful(text: string): boolean {
   const letters = (trimmed.match(/[a-zA-Z]/g) ?? []).length;
   const words = trimmed.split(/\s+/).filter((w) => /[a-zA-Z]/.test(w));
   return trimmed.length >= 12 && words.length >= 3 && letters >= 8;
+}
+
+/**
+ * Seed Whisper with names it is likely to hear. The picked contact goes first
+ * so it survives the prompt-length truncation in buildVocabularyPrompt.
+ */
+async function vocabularyFor(contactId: string | null): Promise<string[]> {
+  let contacts;
+  try {
+    contacts = await getContactsForPicker();
+  } catch {
+    return []; // Biasing is a nice-to-have; never fail the transcription for it.
+  }
+  const picked = contactId ? contacts.find((c) => c.id === contactId) : null;
+  const ordered = picked
+    ? [picked, ...contacts.filter((c) => c.id !== picked.id)]
+    : contacts;
+  return ordered.flatMap((c) => [c.name, c.company ?? ""]);
+}
+
+/**
+ * Transcribe a recording into raw text for the capture textarea. Used only by
+ * browsers where the in-browser Web Speech API is unavailable or unreliable
+ * (iOS Safari, Firefox) — everywhere else transcription never leaves the client.
+ */
+export async function transcribeAction(
+  formData: FormData,
+): Promise<TranscribeResponse> {
+  const audio = formData.get("audio");
+  if (!(audio instanceof Blob) || audio.size === 0) {
+    return { ok: false, error: "No audio was recorded.", retryable: false };
+  }
+
+  // Trust whichever duration is larger: a client under-reporting its clip
+  // length must not be able to slip past the quota. ~3KB/s at 24kbps mono.
+  const claimed = Number(formData.get("durationSeconds"));
+  const estimatedSeconds = Math.max(
+    Number.isFinite(claimed) ? claimed : 0,
+    audio.size / 3000,
+  );
+
+  if (estimatedSeconds > MAX_RECORDING_SECONDS * 1.5) {
+    return { ok: false, error: "That recording is too long.", retryable: false };
+  }
+
+  let quota;
+  try {
+    quota = await checkTranscriptionQuota(estimatedSeconds);
+  } catch {
+    return {
+      ok: false,
+      error: "Couldn't check your voice-note allowance. Try again.",
+      retryable: true,
+    };
+  }
+  if (!quota.allowed) {
+    return {
+      ok: false,
+      error:
+        "You've hit today's voice-note limit. Type your notes below, or record again tomorrow.",
+      retryable: false,
+    };
+  }
+
+  const contactIdRaw = formData.get("contactId");
+  const contactId = typeof contactIdRaw === "string" && contactIdRaw ? contactIdRaw : null;
+
+  let text: string;
+  try {
+    text = await transcribeAudio({
+      audio,
+      vocabulary: await vocabularyFor(contactId),
+    });
+  } catch (err) {
+    if (err instanceof TranscriptionError) {
+      return { ok: false, error: err.message, retryable: err.retryable };
+    }
+    return {
+      ok: false,
+      error: "Transcription failed. Your recording is still here — try again.",
+      retryable: true,
+    };
+  }
+
+  // Bill only successful calls, and never let a metering failure lose the text.
+  try {
+    await recordTranscriptionUsage(estimatedSeconds);
+  } catch {
+    // Intentionally ignored.
+  }
+
+  if (text.trim() === "") {
+    return {
+      ok: false,
+      error: "Didn't catch anything — check your mic and try again.",
+      retryable: true,
+    };
+  }
+  return { ok: true, text };
 }
 
 export async function extractAction(input: {

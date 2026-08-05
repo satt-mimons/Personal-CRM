@@ -7,6 +7,12 @@ import type {
   ActionOwner,
 } from "@/lib/db/types";
 
+/**
+ * Hard cap on one recording. At the 24kbps mono bitrate the recorder requests
+ * this is roughly 540KB, comfortably inside Vercel's 4.5MB request body limit.
+ */
+export const MAX_RECORDING_SECONDS = 180;
+
 export interface DuplicateInfo {
   id: string;
   name: string;
@@ -18,6 +24,11 @@ export interface DuplicateInfo {
 export type ExtractResponse =
   | { ok: true; extraction: ExtractionResult; duplicates: DuplicateInfo[] }
   | { ok: false; error: string; rawText: string };
+
+export type TranscribeResponse =
+  | { ok: true; text: string }
+  /** `retryable` lets the UI offer "try again" without re-recording. */
+  | { ok: false; error: string; retryable: boolean };
 
 export interface EditableContact {
   name: string;

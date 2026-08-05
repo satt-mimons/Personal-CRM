@@ -6,6 +6,7 @@ import type { ExtractionResult } from "@/lib/llm/extract";
 import { normalize } from "@/lib/utils/fuzzy";
 import { extractAction } from "./actions";
 import { ConfirmForm } from "./confirm-form";
+import { VoiceRecorder } from "./voice-recorder";
 import type { DuplicateInfo } from "./types";
 
 type Step =
@@ -55,6 +56,13 @@ export function LogFlow({
     () => filterContacts(contacts, query),
     [contacts, query],
   );
+
+  /** Append rather than replace so dictation can be mixed with typing, and so
+   *  several short bursts add up instead of overwriting each other. */
+  function appendTranscript(text: string) {
+    setRawText((prev) => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
 
   function submitCapture() {
     setError(null);
@@ -162,6 +170,12 @@ export function LogFlow({
           </>
         )}
       </div>
+
+      <VoiceRecorder
+        contactId={selectedContact?.id ?? null}
+        onTranscript={appendTranscript}
+        disabled={pending}
+      />
 
       {/* Raw notes */}
       <textarea
