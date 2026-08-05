@@ -25,22 +25,21 @@ grant select, insert, update on public.transcription_usage to authenticated;
 
 -- Atomic upsert + increment. Doing this in SQL avoids the read-modify-write
 -- race two concurrent recordings from the same user would otherwise hit.
+-- Plain SQL rather than plpgsql: the OUT column names collide with the table's
+-- own column names, and plpgsql would try to resolve them as variables.
 create or replace function public.record_transcription_usage(
   p_seconds int
 )
 returns table (seconds int, requests int)
-language plpgsql
+language sql
 security invoker
 as $$
-begin
-  return query
   insert into public.transcription_usage as tu (user_id, day, seconds, requests)
   values (auth.uid(), current_date, greatest(p_seconds, 0), 1)
   on conflict (user_id, day) do update
     set seconds  = tu.seconds + greatest(p_seconds, 0),
         requests = tu.requests + 1
   returning tu.seconds, tu.requests;
-end;
 $$;
 
 grant execute on function public.record_transcription_usage(int) to authenticated;

@@ -49,10 +49,22 @@ export interface UseAudioRecorder {
   cancel: () => void;
 }
 
-export function useAudioRecorder(): UseAudioRecorder {
+/**
+ * @param onAutoStop Called with the audio when the recorder hits the length cap
+ *   on its own. Without it a clip that runs to the limit would be discarded,
+ *   since nothing is awaiting the internally triggered stop().
+ */
+export function useAudioRecorder(
+  onAutoStop?: (recording: Recording | null) => void,
+): UseAudioRecorder {
   const [recording, setRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  const autoStopRef = useRef(onAutoStop);
+  useEffect(() => {
+    autoStopRef.current = onAutoStop;
+  }, [onAutoStop]);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -151,7 +163,12 @@ export function useAudioRecorder(): UseAudioRecorder {
     tickRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
       setElapsedSeconds(elapsed);
-      if (elapsed >= MAX_RECORDING_SECONDS) void stop();
+      if (elapsed < MAX_RECORDING_SECONDS) return;
+      // Clear first: stop() is async, and the interval would otherwise fire
+      // again before onstop gets a chance to tear things down.
+      clearInterval(tickRef.current!);
+      tickRef.current = null;
+      void stop().then((result) => autoStopRef.current?.(result));
     }, 250);
   }, [releaseStream, stop]);
 

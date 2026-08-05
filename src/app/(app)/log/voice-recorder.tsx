@@ -63,7 +63,9 @@ export function VoiceRecorder({
   const [pending, startTransition] = useTransition();
 
   const speech = useSpeechRecognition();
-  const recorder = useAudioRecorder();
+  const recorder = useAudioRecorder((recording) => {
+    if (recording) send(recording);
+  });
   // Kept so a failed upload can be retried without asking the user to talk again.
   const lastRecordingRef = useRef<Recording | null>(null);
 
@@ -106,6 +108,7 @@ export function VoiceRecorder({
       if (speech.listening) {
         const text = speech.stop();
         if (text) onTranscript(text);
+        else setError("Didn't catch anything — check your mic and try again.");
       } else {
         speech.start();
       }
