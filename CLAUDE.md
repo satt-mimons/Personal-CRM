@@ -177,17 +177,18 @@ Copy `.env.example` → `.env.local` (and mirror in Vercel):
 the confirm step, and saving are unchanged. **Audio is never persisted** — it is
 transcribed in flight and discarded.
 
-Two engines, chosen at mount in `voice-recorder.tsx`:
+Engine choice (resolved in `voice-recorder.tsx` from a server-provided
+`transcriptionConfigured` flag = `Boolean(process.env.GROQ_API_KEY)`):
 
-| Browser | Engine | Cost |
-| ---------------------------- | ------------------------------------- | ----- |
-| Chrome, Edge, Android, macOS Safari | Web Speech API, in-browser | $0 |
-| iOS Safari, Firefox | `MediaRecorder` → Groq Whisper | quota |
+| Condition | Engine | Notes |
+| ----------------------------------------- | -------------------------------- | ----- |
+| `GROQ_API_KEY` set + MediaRecorder | Record → Groq Whisper (primary) | Reliable. Web Speech may run as live captions only. |
+| No key + Web Speech available | In-browser Web Speech | Fallback only. |
+| No key + MediaRecorder only | Mic shows an error until key is set | |
 
-Web Speech carries most traffic and consumes no quota we own, which is what keeps
-this free as user count grows. iOS is deliberately excluded from it: the API
-exists there but ends sessions mid-sentence, and losing a brain dump is the worst
-failure this screen has.
+Groq is primary on purpose: Web Speech often looks live, then returns an empty
+string on stop because finals arrive asynchronously after `recognition.stop()`.
+That produced "Didn't catch anything" after a session that seemed to work.
 
 - Recording caps at `MAX_RECORDING_SECONDS` (180) at 24kbps mono — roughly 540KB,
   under Vercel's hard 4.5MB body limit. `experimental.serverActions.bodySizeLimit`
@@ -204,3 +205,15 @@ failure this screen has.
 - `getUserMedia` requires HTTPS. `localhost:3002` is fine; testing from a phone
   over plain http on the LAN is not — use a Vercel preview URL.
 - Provider is swappable via `createGroqProvider` in `src/lib/llm/transcribe.ts`.
+
+### `GROQ_API_KEY` setup (per machine / per deploy)
+
+The key is a secret — it is gitignored and **cannot** be committed. Each place
+that runs Next.js needs its own copy:
+
+1. **Local:** put `GROQ_API_KEY=...` in `.env.local`, then restart `npm run dev`
+   (env is read at boot). Prefer `vercel env pull .env.local` once the key lives
+   in the Vercel project, so laptops stay in sync without pasting.
+2. **Vercel:** Project Settings → Environment Variables → `GROQ_API_KEY` for
+   Production and Preview. Cloud-agent `.env.local` does **not** sync to your
+   laptop or to Vercel.

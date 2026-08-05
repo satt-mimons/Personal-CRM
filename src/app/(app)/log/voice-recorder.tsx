@@ -3,16 +3,20 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { transcribeAction } from "./actions";
 import { MAX_RECORDING_SECONDS } from "./types";
-import { useAudioRecorder, isRecordingSupported, type Recording } from "./use-audio-recorder";
+import {
+  useAudioRecorder,
+  isRecordingSupported,
+  type Recording,
+} from "./use-audio-recorder";
 import {
   useSpeechRecognition,
-  isSpeechRecognitionReliable,
+  isSpeechRecognitionAvailable,
 } from "./use-speech-recognition";
 
 /**
- * "speech" transcribes in the browser (free, no server round-trip). "record"
- * captures audio and transcribes server-side, for browsers where the in-browser
- * recognizer is missing or drops words mid-sentence.
+ * "record" = MediaRecorder → Groq (authoritative). Preferred whenever the
+ * server has GROQ_API_KEY, because Web Speech often returns empty on stop.
+ * "speech" = in-browser only, used when Groq is not configured.
  */
 type Engine = "speech" | "record" | "none";
 
@@ -51,33 +55,51 @@ export function VoiceRecorder({
   contactId,
   onTranscript,
   disabled = false,
+  /** Server-side: process.env.GROQ_API_KEY is set. Never send the key itself. */
+  transcriptionConfigured = false,
 }: {
   contactId: string | null;
   onTranscript: (text: string) => void;
   disabled?: boolean;
+  transcriptionConfigured?: boolean;
 }) {
-  // Resolved after mount: the checks read navigator/window.
   const [engine, setEngine] = useState<Engine>("none");
   const [error, setError] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
   const [pending, startTransition] = useTransition();
+  // Live captions via Web Speech while MediaRecorder owns the final transcript.
+  const [captions, setCaptions] = useState(false);
 
   const speech = useSpeechRecognition();
   const recorder = useAudioRecorder((recording) => {
     if (recording) send(recording);
   });
-  // Kept so a failed upload can be retried without asking the user to talk again.
   const lastRecordingRef = useRef<Recording | null>(null);
 
   useEffect(() => {
-    if (isSpeechRecognitionReliable()) setEngine("speech");
-    else if (isRecordingSupported()) setEngine("record");
-    else setEngine("none");
-  }, []);
+    // Prefer Groq whenever the key is present — Web Speech's stop() race is
+    // what produced "Didn't catch anything" after a session that looked live.
+    if (transcriptionConfigured && isRecordingSupported()) {
+      setEngine("record");
+      setCaptions(isSpeechRecognitionAvailable());
+    } else if (isSpeechRecognitionAvailable()) {
+      setEngine("speech");
+      setCaptions(false);
+    } else if (isRecordingSupported()) {
+      // Can record, but nothing to transcribe with.
+      setEngine("record");
+      setCaptions(false);
+      setError(
+        "Missing GROQ_API_KEY. Add it to .env.local (or Vercel env), then restart the server.",
+      );
+    } else {
+      setEngine("none");
+    }
+  }, [transcriptionConfigured]);
 
   const busy = pending || disabled;
   const active = speech.listening || recorder.recording;
-  const shownError = error ?? speech.error ?? recorder.error;
+  const shownError = error ?? (engine === "speech" ? speech.error : null) ?? recorder.error;
 
   function send(recording: Recording) {
     lastRecordingRef.current = recording;
@@ -106,9 +128,12 @@ export function VoiceRecorder({
 
     if (engine === "speech") {
       if (speech.listening) {
-        const text = speech.stop();
+        const text = await speech.stop();
         if (text) onTranscript(text);
-        else setError("Didn't catch anything — check your mic and try again.");
+        else
+          setError(
+            "Didn't catch anything — check your mic and try again.",
+          );
       } else {
         speech.start();
       }
@@ -116,22 +141,32 @@ export function VoiceRecorder({
     }
 
     if (recorder.recording) {
+      speech.abort();
       const recording = await recorder.stop();
       if (recording) send(recording);
       return;
     }
+
+    if (!transcriptionConfigured) {
+      setError(
+        "Missing GROQ_API_KEY. Add it to .env.local (or Vercel env), then restart the server.",
+      );
+      return;
+    }
     await recorder.start();
+    // Live captions are best-effort — failures must not block recording.
+    if (captions) {
+      try {
+        speech.start();
+      } catch {
+        // Ignore.
+      }
+    }
   }
 
   function retry() {
     const recording = lastRecordingRef.current;
     if (recording) send(recording);
-  }
-
-  function useRecordingInstead() {
-    if (speech.listening) speech.stop();
-    setError(null);
-    setEngine("record");
   }
 
   if (engine === "none") return null;
@@ -140,6 +175,11 @@ export function VoiceRecorder({
     engine === "record" &&
     recorder.recording &&
     recorder.elapsedSeconds >= MAX_RECORDING_SECONDS - 30;
+
+  const showLiveText =
+    active &&
+    (engine === "speech" || captions) &&
+    (speech.transcript || speech.interim);
 
   return (
     <div className="flex flex-col gap-2">
@@ -194,8 +234,7 @@ export function VoiceRecorder({
         </div>
       </div>
 
-      {/* Live text, so it is obvious the recognizer is actually hearing you. */}
-      {engine === "speech" && active && (speech.transcript || speech.interim) && (
+      {showLiveText && (
         <p className="max-h-24 overflow-y-auto rounded-lg bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
           {speech.transcript}
           {speech.interim && (
@@ -215,15 +254,6 @@ export function VoiceRecorder({
               className="underline underline-offset-2 disabled:opacity-50"
             >
               Try again
-            </button>
-          )}
-          {engine === "speech" && (
-            <button
-              type="button"
-              onClick={useRecordingInstead}
-              className="underline underline-offset-2"
-            >
-              Record audio instead
             </button>
           )}
         </div>

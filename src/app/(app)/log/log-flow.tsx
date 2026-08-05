@@ -38,9 +38,12 @@ function filterContacts(
 export function LogFlow({
   contacts,
   preselectedContact = null,
+  transcriptionConfigured = false,
 }: {
   contacts: ContactPickerRow[];
   preselectedContact?: ContactPickerRow | null;
+  /** True when GROQ_API_KEY is present on the server (never the key itself). */
+  transcriptionConfigured?: boolean;
 }) {
   const [step, setStep] = useState<Step>({ name: "capture" });
   const [rawText, setRawText] = useState("");
@@ -175,6 +178,7 @@ export function LogFlow({
         contactId={selectedContact?.id ?? null}
         onTranscript={appendTranscript}
         disabled={pending}
+        transcriptionConfigured={transcriptionConfigured}
       />
 
       {/* Raw notes */}

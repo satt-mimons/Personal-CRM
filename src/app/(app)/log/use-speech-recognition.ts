@@ -55,7 +55,7 @@ export function isIOS(): boolean {
   );
 }
 
-export function isSpeechRecognitionReliable(): boolean {
+export function isSpeechRecognitionAvailable(): boolean {
   return getConstructor() !== null && !isIOS();
 }
 
@@ -67,8 +67,14 @@ export interface UseSpeechRecognition {
   interim: string;
   error: string | null;
   start: () => void;
-  /** Stops listening and returns the final transcript. */
-  stop: () => string;
+  /**
+   * Stops listening and resolves with the final transcript once the recognizer
+   * has flushed. Calling recognition.stop() delivers the last finals
+   * asynchronously — returning transcriptRef synchronously used to drop them.
+   */
+  stop: () => Promise<string>;
+  /** Soft-stop without waiting; used when tearing down a live-caption overlay. */
+  abort: () => void;
 }
 
 export function useSpeechRecognition(): UseSpeechRecognition {
@@ -81,8 +87,16 @@ export function useSpeechRecognition(): UseSpeechRecognition {
   // per session makes Safari play the system chime on every start.
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptRef = useRef("");
+  const interimRef = useRef("");
+  const listeningRef = useRef(false);
   // The recognizer ends on every pause; restart until the user actually stops.
   const wantListeningRef = useRef(false);
+  const stopResolverRef = useRef<((text: string) => void) | null>(null);
+
+  function markListening(value: boolean) {
+    listeningRef.current = value;
+    setListening(value);
+  }
 
   const ensureRecognition = useCallback((): SpeechRecognitionLike | null => {
     if (recognitionRef.current) return recognitionRef.current;
@@ -105,6 +119,7 @@ export function useSpeechRecognition(): UseSpeechRecognition {
           pending += text;
         }
       }
+      interimRef.current = pending;
       setTranscript(transcriptRef.current);
       setInterim(pending);
     };
@@ -112,30 +127,51 @@ export function useSpeechRecognition(): UseSpeechRecognition {
     recognition.onerror = (event) => {
       if (event.error === "aborted" || event.error === "no-speech") return;
       wantListeningRef.current = false;
-      setListening(false);
+      markListening(false);
       setError(
         event.error === "not-allowed" || event.error === "service-not-allowed"
           ? "Microphone access was blocked. Enable it in your browser settings."
           : "Dictation stopped unexpectedly. Your words so far are saved.",
       );
+      const resolve = stopResolverRef.current;
+      if (resolve) {
+        stopResolverRef.current = null;
+        resolve(combinedTranscript());
+      }
     };
 
     recognition.onend = () => {
-      if (!wantListeningRef.current) {
-        setListening(false);
+      if (wantListeningRef.current) {
+        try {
+          recognition.start();
+        } catch {
+          wantListeningRef.current = false;
+          markListening(false);
+        }
         return;
       }
-      try {
-        recognition.start();
-      } catch {
-        wantListeningRef.current = false;
-        setListening(false);
+      markListening(false);
+      const resolve = stopResolverRef.current;
+      if (resolve) {
+        stopResolverRef.current = null;
+        resolve(combinedTranscript());
       }
     };
 
     recognitionRef.current = recognition;
     return recognition;
   }, []);
+
+  function combinedTranscript(): string {
+    // Promote whatever the recognizer was still revising so a quick stop
+    // doesn't throw away the last half-sentence.
+    const combined = `${transcriptRef.current} ${interimRef.current}`.trim();
+    transcriptRef.current = combined;
+    interimRef.current = "";
+    setTranscript(combined);
+    setInterim("");
+    return combined;
+  }
 
   const start = useCallback(() => {
     const recognition = ensureRecognition();
@@ -144,34 +180,67 @@ export function useSpeechRecognition(): UseSpeechRecognition {
       return;
     }
     transcriptRef.current = "";
+    interimRef.current = "";
     setTranscript("");
     setInterim("");
     setError(null);
     wantListeningRef.current = true;
     try {
       recognition.start();
-      setListening(true);
+      markListening(true);
     } catch {
       // start() throws if a previous session is still winding down.
-      setListening(true);
+      markListening(true);
     }
   }, [ensureRecognition]);
 
-  const stop = useCallback((): string => {
+  const stop = useCallback((): Promise<string> => {
     wantListeningRef.current = false;
-    setListening(false);
-    setInterim("");
+    const recognition = recognitionRef.current;
+    if (!recognition) {
+      return Promise.resolve(combinedTranscript());
+    }
+    return new Promise<string>((resolve) => {
+      // Already idle — onend will not fire again.
+      if (!listeningRef.current) {
+        resolve(combinedTranscript());
+        return;
+      }
+      stopResolverRef.current = resolve;
+      try {
+        recognition.stop();
+      } catch {
+        stopResolverRef.current = null;
+        resolve(combinedTranscript());
+      }
+      // Safety net: some browsers never fire onend after stop().
+      setTimeout(() => {
+        if (stopResolverRef.current === resolve) {
+          stopResolverRef.current = null;
+          markListening(false);
+          resolve(combinedTranscript());
+        }
+      }, 1500);
+    });
+  }, []);
+
+  const abort = useCallback(() => {
+    wantListeningRef.current = false;
+    stopResolverRef.current = null;
     try {
-      recognitionRef.current?.stop();
+      recognitionRef.current?.abort();
     } catch {
       // Already stopped.
     }
-    return transcriptRef.current.trim();
+    markListening(false);
+    setInterim("");
+    interimRef.current = "";
   }, []);
 
   useEffect(() => {
     return () => {
       wantListeningRef.current = false;
+      stopResolverRef.current = null;
       try {
         recognitionRef.current?.abort();
       } catch {
@@ -180,5 +249,5 @@ export function useSpeechRecognition(): UseSpeechRecognition {
     };
   }, []);
 
-  return { listening, transcript, interim, error, start, stop };
+  return { listening, transcript, interim, error, start, stop, abort };
 }

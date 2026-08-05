@@ -12,5 +12,13 @@ export default async function LogPage({
   const contacts = await getContactsForPicker();
   const preselected =
     contactId ? contacts.find((c) => c.id === contactId) ?? null : null;
-  return <LogFlow contacts={contacts} preselectedContact={preselected} />;
+  // Boolean only — never pass the key to the client.
+  const transcriptionConfigured = Boolean(process.env.GROQ_API_KEY);
+  return (
+    <LogFlow
+      contacts={contacts}
+      preselectedContact={preselected}
+      transcriptionConfigured={transcriptionConfigured}
+    />
+  );
 }
