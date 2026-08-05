@@ -114,3 +114,24 @@ export interface DigestRun {
   nudge_count: number;
   payload: unknown;
 }
+
+export type ReminderDigestFrequency =
+  | "daily"
+  | "weekdays"
+  | "weekly"
+  | "custom";
+
+export interface ReminderSettings {
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  email_enabled: boolean;
+  digest_frequency: ReminderDigestFrequency;
+  custom_cadence_days: number | null;
+  digest_time: string;
+  timezone: string;
+  include_tasks: boolean;
+  include_followups: boolean;
+  include_waiting: boolean;
+  include_upcoming: boolean;
+}

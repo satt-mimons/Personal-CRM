@@ -27,6 +27,14 @@ export function Nav({ todayCount = 0 }: { todayCount?: number }) {
         </Link>
 
         <div className="flex items-center gap-2">
+          {/* Log — prominent button, not a tab */}
+          <Link
+            href="/log"
+            className="hidden rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 sm:inline-flex"
+          >
+            + Log
+          </Link>
+
           {/* Desktop tabs */}
           <nav className="hidden items-center gap-1 sm:flex">
             {TABS.map((t) => (
@@ -55,21 +63,25 @@ export function Nav({ todayCount = 0 }: { todayCount?: number }) {
             ))}
           </nav>
 
-          {/* Log — prominent button, not a tab */}
-          <Link
-            href="/log"
-            className="hidden rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 sm:inline-flex"
-          >
-            + Log
-          </Link>
-
           <form action={signOut}>
-            <button
-              type="submit"
-              className="rounded-md px-2 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100"
-            >
-              Sign out
-            </button>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/settings/reminders"
+                className={`rounded-md px-2 py-1.5 text-sm ${
+                  isActive(pathname, "/settings")
+                    ? "bg-neutral-100 text-neutral-900"
+                    : "text-neutral-500 hover:bg-neutral-100"
+                }`}
+              >
+                Settings
+              </Link>
+              <button
+                type="submit"
+                className="rounded-md px-2 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100"
+              >
+                Sign out
+              </button>
+            </div>
           </form>
         </div>
       </header>
