@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getReminderSettings } from "@/lib/db/reminder-settings";
 import { getHomeReminders } from "@/lib/db/reminders";
 import type { ContactStatus } from "@/lib/db/types";
 import {
@@ -155,8 +156,22 @@ function UpcomingRow({ contact }: { contact: ContactStatus }) {
   );
 }
 
+function EmailReminderPill() {
+  return (
+    <Link
+      href="/settings/reminders"
+      className="inline-flex rounded-full border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+    >
+      Turn on email reminders
+    </Link>
+  );
+}
+
 export default async function TodayPage() {
-  const reminders = await getHomeReminders();
+  const [reminders, reminderSettings] = await Promise.all([
+    getHomeReminders(),
+    getReminderSettings(),
+  ]);
   const nextTask = reminders.tasks[0] ?? null;
   const nextFollowup = reminders.overdueFollowups[0] ?? null;
   const nextChat = reminders.upcomingChats[0] ?? null;
@@ -262,7 +277,10 @@ export default async function TodayPage() {
         </div>
       )}
 
-      <ReminderDetailsGroup hasDetails={hasDetails}>
+      <ReminderDetailsGroup
+        action={!reminderSettings.email_enabled ? <EmailReminderPill /> : null}
+        hasDetails={hasDetails}
+      >
         <div className="flex flex-col gap-2">
           <ReminderDetailSection
             title="Tasks"
